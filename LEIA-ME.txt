@@ -1,0 +1,15 @@
+REALTIME TV (Android TV + celular) - como gerar o APK
+
+1) Crie uma conta gratis em github.com e um repositorio novo (marque "Private").
+2) No repositorio: "uploading an existing file" e arraste TODO o conteudo desta pasta
+   (inclusive a pasta .github). Clique em "Commit changes".
+   Se a pasta .github nao subir: Add file > Create new file, nome:  .github/workflows/apk.yml
+   e cole o conteudo do arquivo apk.yml que acompanha este pacote.
+3) Aba "Actions" > "Gerar APK" > "Run workflow". Espera uns 6 minutos.
+4) Pronto: baixe o RealtimeTV.apk em "Releases" (lado direito do repositorio)
+   ou em Actions > execucao > Artifacts.
+5) Instale: celular -> abra o APK e permita "fontes desconhecidas".
+   Android TV -> use o app "Send Files to TV" ou "Downloader" com o link do APK, ou pendrive.
+
+Servidor usado pelo app (fixo): veja gradle.properties -> RTV_SERVER
+Se a compilacao falhar, abra a execucao em Actions: o resumo mostra os erros; envie para o Claude corrigir.

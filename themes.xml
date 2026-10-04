@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RTV" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/rtv_bg</item>
+        <item name="android:statusBarColor">@color/rtv_bg</item>
+        <item name="android:navigationBarColor">@color/rtv_bg</item>
+        <item name="android:colorPrimary">@color/rtv_cyan</item>
+        <item name="android:colorAccent">@color/rtv_cyan</item>
+    </style>
+</resources>
