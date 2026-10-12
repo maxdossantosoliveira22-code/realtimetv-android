@@ -1,0 +1,36 @@
+{
+    "logs": [
+        {
+            "outputFile": "br.realtime.tv.app-mergeDebugResources-9:/values-sv/values-sv.xml",
+            "map": [
+                {
+                    "source": "/home/runner/.gradle/caches/8.9/transforms/7e66ba48753ba7d83b1da79fb6ea90d9/transformed/core-1.8.0/res/values-sv/values-sv.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    },
+                    "to": {
+                        "startLines": "11",
+                        "startColumns": "4",
+                        "startOffsets": "738",
+                        "endColumns": "100",
+                        "endOffsets": "834"
+                    }
+                },
+                {
+                    "source": "/home/runner/.gradle/caches/8.9/transforms/3e26a279b5271addc37cc624a447e93a/transformed/media3-exoplayer-1.3.1/res/values-sv/values-sv.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9,10",
+                        "startColumns": "4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,128,191,255,330,411,485,579,665",
+                        "endColumns": "72,62,63,74,80,73,93,85,72",
+                        "endOffsets": "123,186,250,325,406,480,574,660,733"
+                    }
+                }
+            ]
+        }
+    ]
+}
