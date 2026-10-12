@@ -1,0 +1,53 @@
+REALTIME PARA ANDROID (celular e TV Box)
+========================================
+
+O app é um projeto pronto. Para virar o arquivo APK (que você instala no
+aparelho), use o GitHub, que compila de graça. Não precisa programar.
+
+PASSO 1 - CONTA E REPOSITÓRIO
+  1. Entre em github.com e crie uma conta grátis (ou entre na sua).
+  2. Clique em "+" (canto superior direito) > "New repository".
+  3. Nome: realtime-android   |   marque "Private"   |   "Create repository".
+
+PASSO 2 - ENVIAR OS ARQUIVOS
+  1. Descompacte o arquivo Realtime-Android-projeto.zip no notebook.
+  2. Na página do repositório clique em "uploading an existing file".
+  3. Arraste PARA DENTRO da página tudo o que está dentro da pasta
+     descompactada: as pastas "app" e ".github" e os arquivos
+     build.gradle.kts, settings.gradle.kts, gradle.properties.
+     (No Windows, ative "Itens ocultos" no Explorador se não ver a pasta .github.)
+  4. Espere terminar de enviar e clique em "Commit changes".
+
+  Se a pasta .github não subir: clique em "Add file" > "Create new file",
+  no nome digite exatamente  .github/workflows/build.yml  e cole dentro o
+  conteúdo do arquivo build.yml que veio junto. Depois "Commit changes".
+
+PASSO 3 - GERAR O APK
+  1. Clique na aba "Actions" do repositório.
+  2. Se pedir, clique em "I understand my workflows, go ahead and enable them".
+  3. A compilação começa sozinha ao enviar os arquivos (leva uns 5 a 10 minutos).
+     Se não começar: clique em "Gerar APK Realtime" > "Run workflow".
+  4. Quando ficar com o ícone verde, abra a execução e, no fim da página, em
+     "Artifacts", baixe "Realtime-APK". É um zip: dentro tem o app-debug.apk.
+
+  SE FICAR VERMELHO: abra a execução, clique no passo "Compilar", copie as
+  linhas de erro (as que começam com "e:" ou "error:") e cole para mim.
+
+PASSO 4 - INSTALAR
+  Celular: mande o app-debug.apk para o celular (WhatsApp, Telegram, Drive ou
+  cabo), toque nele e permita "instalar apps desconhecidos" quando pedir.
+  TV Box / Android TV: copie o APK num pendrive e abra com um gerenciador de
+  arquivos (ex.: "File Commander" ou "X-plore"), ou use o app "Send Files to TV".
+
+USO
+  - Entra só com usuário e senha (o servidor Realtime já vai dentro do app).
+  - Celular: toque. TV: controle remoto (setas, OK, Voltar).
+  - Player: OK abre os controles; no canal ao vivo, cima/baixo troca de canal;
+    em filme, esquerda/direita avança/volta 10 segundos.
+  - Ajustes: formato dos canais (Automático/HLS/TS), filtro adulto,
+    compatibilidade H.265 do aparelho, sair da conta.
+
+ATENÇÃO
+  Este código foi escrito sem poder compilar aqui. Pode ser que a primeira
+  compilação mostre algum erro pequeno. É normal: me mande o texto do erro
+  que eu corrijo.

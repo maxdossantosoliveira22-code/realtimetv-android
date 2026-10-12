@@ -1,0 +1,45 @@
+name: Gerar APK Realtime
+
+on:
+  push:
+    branches: [realtime-v2]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+      - name: Compilar
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon --console=plain 2>&1 | tee build.log
+      - name: Guardar resultado na branch resultado
+        if: always()
+        run: |
+          mkdir -p /tmp/out
+          cp build.log /tmp/out/ 2>/dev/null || true
+          grep -E "^e: |error:|FAILED|What went wrong" -A3 build.log | head -80 > /tmp/out/erros.txt || true
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/out/RealtimeTV.apk 2>/dev/null || true
+          git config user.name "build"; git config user.email "build@example.com"
+          git checkout --orphan resultado
+          git rm -rf . >/dev/null 2>&1 || true
+          cp /tmp/out/* .
+          git add -A
+          git commit -m "resultado do build [skip ci]"
+          git push -f origin resultado
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Realtime-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
