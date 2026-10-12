@@ -2,7 +2,7 @@ name: Gerar APK Realtime
 
 on:
   push:
-    branches: [realtime-v2]
+    branches: [main, realtime-v2]
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
           mkdir -p /tmp/out
           cp build.log /tmp/out/ 2>/dev/null || true
           grep -E "^e: |error:|FAILED|What went wrong" -A3 build.log | head -80 > /tmp/out/erros.txt || true
-          cp app/build/outputs/apk/debug/app-debug.apk /tmp/out/RealtimeTV.apk 2>/dev/null || true
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/out/Realtime-NOVO.apk 2>/dev/null || true
           git config user.name "build"; git config user.email "build@example.com"
           git checkout --orphan resultado
           git rm -rf . >/dev/null 2>&1 || true
