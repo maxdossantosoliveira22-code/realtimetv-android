@@ -171,8 +171,25 @@ object Api {
         }
         var u = base() + "&action=" + act
         if (!cat.isNullOrEmpty()) u += "&category_id=" + cat
-        val f = fetchFile(u, ttl, 90000) ?: return null
+        val f = fetchFile(u, ttl, if (cat.isNullOrEmpty()) 40000 else 30000) ?: return null
         return parse(f, sec)
+    }
+
+    /** lista completa de uma seção; se o servidor não entregar tudo de uma vez, junta categoria por categoria */
+    fun streamsAll(sec: String, ttl: Int = 43200): List<Raw>? {
+        val full = try { streams(sec, null, ttl) } catch (e: Throwable) { null }
+        if (full != null && full.isNotEmpty()) return full
+        val cats = categories(sec) ?: return full
+        val out = java.util.Collections.synchronizedList(ArrayList<Raw>())
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
+        for (c in cats) {
+            pool.execute {
+                try { streams(sec, c.id, ttl)?.let { out.addAll(it) } } catch (e: Throwable) { }
+            }
+        }
+        pool.shutdown()
+        try { pool.awaitTermination(180, java.util.concurrent.TimeUnit.SECONDS) } catch (e: Exception) { }
+        return if (out.isEmpty()) full else ArrayList(out)
     }
 
     private fun str(r: JsonReader): String = when (r.peek()) {

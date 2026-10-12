@@ -211,7 +211,7 @@ class SearchTab(private val shell: ShellScreen) : Tab {
             val all = ArrayList<Entry>()
             for (sec in listOf("live", "vod", "series")) {
                 val adult = Api.adultIds(sec)
-                val l = Api.streams(sec, null, 43200)
+                val l = Api.streamsAll(sec, 43200)
                 if (l != null) {
                     for (r in l) if (!adult.contains(r.cat)) all.add(r.e)
                 }
