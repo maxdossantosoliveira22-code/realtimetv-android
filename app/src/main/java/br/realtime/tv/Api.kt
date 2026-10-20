@@ -261,16 +261,33 @@ object Api {
     /** novidades para a tela inicial */
     fun highlights(sec: String): List<Entry>? {
         val cats = categories(sec) ?: return null
-        var pick = ""
+        val picks = ArrayList<String>()
         for (c in cats) {
-            if (isNewName(c.name)) { pick = c.id; break }
+            val n = c.name.lowercase(Locale.ROOT)
+            if (n.contains("lançamento") || n.contains("lancamento") || n.contains("novidade") || n.contains("release")) {
+                if (picks.size < 3) picks.add(c.id)
+            }
         }
-        if (pick.isEmpty()) {
+        if (picks.size < 3) {
+            for (y in listOf("2026", "2025")) {
+                for (c in cats) {
+                    if (picks.size < 3 && c.name.contains(y) && !picks.contains(c.id)) picks.add(c.id)
+                }
+                if (picks.isNotEmpty()) break
+            }
+        }
+        if (picks.isEmpty()) {
             val first = cats.firstOrNull() ?: return null
-            pick = first.id
+            picks.add(first.id)
         }
-        val raw = streams(sec, pick) ?: return null
-        return raw.sortedByDescending { it.added }.take(20).map { it.e }
+        val all = ArrayList<Raw>()
+        val seen = HashSet<String>()
+        for (p in picks) {
+            val raw = streams(sec, p, 900) ?: continue
+            for (r in raw) if (seen.add(r.e.key())) all.add(r)
+        }
+        if (all.isEmpty()) return null
+        return all.sortedByDescending { it.added }.take(20).map { it.e }
     }
 
     // ---------- detalhes ----------
