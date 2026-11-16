@@ -11,8 +11,8 @@ android {
         applicationId = "br.realtime.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 22
-        versionName = "2.0.2"
+        versionCode = 30
+        versionName = "2.1.0"
     }
 
     buildTypes {

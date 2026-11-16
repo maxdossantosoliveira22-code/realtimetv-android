@@ -46,8 +46,21 @@ object Fonts {
 }
 
 object Bg {
-    private val pool = Executors.newFixedThreadPool(4)
+    /** fila "o mais novo primeiro": ao rolar a lista, o que aparece agora é carregado antes do que já saiu da tela */
+    private class Lifo : java.util.concurrent.LinkedBlockingDeque<Runnable>() {
+        override fun offer(e: Runnable): Boolean = offerFirst(e)
+    }
+
+    private val pool = java.util.concurrent.ThreadPoolExecutor(6, 6, 30L, java.util.concurrent.TimeUnit.SECONDS, java.util.concurrent.LinkedBlockingQueue<Runnable>())
+    private val epgPool = java.util.concurrent.ThreadPoolExecutor(2, 2, 30L, java.util.concurrent.TimeUnit.SECONDS, Lifo())
+    private val warmPool = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
+
+    init {
+        pool.allowCoreThreadTimeOut(true)
+        epgPool.allowCoreThreadTimeOut(true)
+    }
+
     fun run(f: () -> Unit) {
         pool.execute {
             try {
@@ -56,6 +69,27 @@ object Bg {
             }
         }
     }
+
+    /** programação (EPG): poucas conexões e sem atrapalhar o resto */
+    fun epg(f: () -> Unit) {
+        epgPool.execute {
+            try {
+                f()
+            } catch (e: Throwable) {
+            }
+        }
+    }
+
+    /** tarefas de preparo (baixar listas em segundo plano) */
+    fun warm(f: () -> Unit) {
+        warmPool.execute {
+            try {
+                f()
+            } catch (e: Throwable) {
+            }
+        }
+    }
+
     fun ui(f: () -> Unit) {
         handler.post(f)
     }

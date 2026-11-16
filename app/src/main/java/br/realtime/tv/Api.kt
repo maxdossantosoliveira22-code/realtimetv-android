@@ -41,15 +41,25 @@ object Api {
         return sb.toString()
     }
 
-    /** abre a URL seguindo redirecionamentos (inclusive http -> https) */
-    fun open(url: String, timeout: Int): HttpURLConnection? {
+    /** abre a URL seguindo redirecionamentos (inclusive http -> https); tenta de novo uma vez se a conexão falhar */
+    fun open(url: String, timeout: Int, retry: Boolean = true): HttpURLConnection? {
+        return try {
+            openOnce(url, timeout)
+        } catch (e: java.io.IOException) {
+            if (!retry) throw e
+            openOnce(url, timeout)
+        }
+    }
+
+    private fun openOnce(url: String, timeout: Int): HttpURLConnection? {
         var u = url
         for (i in 0 until 6) {
             val c = URL(u).openConnection() as HttpURLConnection
-            c.connectTimeout = timeout
+            c.connectTimeout = minOf(timeout, 8000)
             c.readTimeout = timeout
             c.instanceFollowRedirects = false
-            c.setRequestProperty("User-Agent", "Realtime/1.0 (Android)")
+            c.setRequestProperty("User-Agent", "Realtime/2.1 (Android)")
+            c.setRequestProperty("Connection", "keep-alive")
             val code = c.responseCode
             if (code in 300..399) {
                 val loc = c.getHeaderField("Location")
@@ -68,35 +78,66 @@ object Api {
     private fun httpText(url: String, timeout: Int): String? {
         return try {
             val c = open(url, timeout) ?: return null
-            val s = c.inputStream.bufferedReader().use { it.readText() }
-            c.disconnect()
-            s
+            c.inputStream.bufferedReader().use { it.readText() }
         } catch (e: Exception) {
             null
         }
     }
 
-    /** baixa para um arquivo no cache (sem carregar tudo na memória). Usa o arquivo antigo se a rede falhar. */
-    fun fetchFile(url: String, ttlSec: Int, timeout: Int = 30000, force: Boolean = false): File? {
-        val f = File(dir, md5(url) + ".json")
-        val fresh = f.exists() && f.length() > 2 && System.currentTimeMillis() - f.lastModified() < ttlSec * 1000L
-        if (!force && fresh) return f
-        val tmp = File(dir, md5(url) + ".tmp")
+    private val inflight = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private fun download(url: String, f: File, timeout: Int): Boolean {
+        val tmp = File(dir, f.name + "." + Thread.currentThread().id + ".tmp")
         try {
-            val c = open(url, timeout)
-            if (c == null) return if (f.exists()) f else null
-            c.inputStream.use { inp -> tmp.outputStream().use { out -> inp.copyTo(out) } }
-            c.disconnect()
+            val c = open(url, timeout) ?: return false
+            c.inputStream.use { inp -> tmp.outputStream().use { out -> inp.copyTo(out, 32768) } }
             if (tmp.length() < 2) {
                 tmp.delete()
-                return if (f.exists()) f else null
+                return false
             }
             f.delete()
-            tmp.renameTo(f)
-            return f
+            return tmp.renameTo(f)
         } catch (e: Exception) {
             tmp.delete()
-            return if (f.exists()) f else null
+            return false
+        }
+    }
+
+    /**
+     * baixa para um arquivo no cache (sem carregar tudo na memória).
+     * Se a rede falhar, usa o arquivo antigo.
+     * [swr] = true: se já existe uma cópia (mesmo velha, até 3 dias), devolve na hora e atualiza em segundo plano.
+     */
+    fun fetchFile(url: String, ttlSec: Int, timeout: Int = 30000, force: Boolean = false, swr: Boolean = false): File? {
+        val f = File(dir, md5(url) + ".json")
+        val exists = f.exists() && f.length() > 2
+        val age = if (exists) System.currentTimeMillis() - f.lastModified() else Long.MAX_VALUE
+        if (!force && exists && age < ttlSec * 1000L) return f
+        if (!force && swr && exists && age < 3L * 86400000L) {
+            val key = f.name
+            if (inflight.add(key)) {
+                Bg.warm {
+                    try { download(url, f, timeout) } finally { inflight.remove(key) }
+                }
+            }
+            return f
+        }
+        if (download(url, f, timeout)) return f
+        return if (exists) f else null
+    }
+
+    /** prepara o app em segundo plano: categorias e listas, para as telas abrirem rápido */
+    fun warm() {
+        if (Store.user.isEmpty() || Store.pass.isEmpty()) return
+        Bg.warm {
+            for (s in listOf("live", "vod", "series")) {
+                try { categories(s) } catch (e: Throwable) { }
+            }
+            // listas completas (para a busca): só baixa o arquivo, sem processar
+            Thread.sleep(4000)
+            for ((s, act) in listOf("live" to "get_live_streams", "vod" to "get_vod_streams", "series" to "get_series")) {
+                try { fetchFile(base() + "&action=" + act, 43200, 60000, swr = true) } catch (e: Throwable) { }
+            }
         }
     }
 
@@ -114,7 +155,7 @@ object Api {
     // ---------- login ----------
     /** devolve null se deu certo, ou a mensagem de erro */
     fun login(): String? {
-        val s = httpText(base(), 15000) ?: return "Sem resposta do servidor. Verifique a internet."
+        val s = httpText(base(), 12000) ?: return "Sem resposta do servidor. Verifique a internet."
         val o = try { JSONObject(s) } catch (e: Exception) { return "O servidor devolveu uma resposta inválida." }
         val ui = o.optJSONObject("user_info") ?: return "Usuário ou senha incorretos."
         if (ui.optString("auth") != "1") return "Usuário ou senha incorretos."
@@ -131,7 +172,7 @@ object Api {
             "vod" -> "get_vod_categories"
             else -> "get_series_categories"
         }
-        val f = fetchFile(base() + "&action=" + act, 21600) ?: return null
+        val f = fetchFile(base() + "&action=" + act, 21600, swr = true) ?: return null
         val a = try { JSONArray(f.readText()) } catch (e: Exception) { f.delete(); return null }
         val out = ArrayList<Cat>()
         for (i in 0 until a.length()) {
@@ -151,7 +192,7 @@ object Api {
             "vod" -> "get_vod_categories"
             else -> "get_series_categories"
         }
-        val f = fetchFile(base() + "&action=" + act, 21600) ?: return out
+        val f = fetchFile(base() + "&action=" + act, 21600, swr = true) ?: return out
         try {
             val a = JSONArray(f.readText())
             for (i in 0 until a.length()) {
@@ -163,7 +204,7 @@ object Api {
         return out
     }
 
-    fun streams(sec: String, cat: String?, ttl: Int = 1800): List<Raw>? {
+    fun streams(sec: String, cat: String?, ttl: Int = 1800, swr: Boolean = false): List<Raw>? {
         val act = when (sec) {
             "live" -> "get_live_streams"
             "vod" -> "get_vod_streams"
@@ -171,20 +212,20 @@ object Api {
         }
         var u = base() + "&action=" + act
         if (!cat.isNullOrEmpty()) u += "&category_id=" + cat
-        val f = fetchFile(u, ttl, if (cat.isNullOrEmpty()) 40000 else 30000) ?: return null
+        val f = fetchFile(u, ttl, if (cat.isNullOrEmpty()) 60000 else 30000, swr = swr) ?: return null
         return parse(f, sec)
     }
 
     /** lista completa de uma seção; se o servidor não entregar tudo de uma vez, junta categoria por categoria */
     fun streamsAll(sec: String, ttl: Int = 43200): List<Raw>? {
-        val full = try { streams(sec, null, ttl) } catch (e: Throwable) { null }
+        val full = try { streams(sec, null, ttl, true) } catch (e: Throwable) { null }
         if (full != null && full.isNotEmpty()) return full
         val cats = categories(sec) ?: return full
         val out = java.util.Collections.synchronizedList(ArrayList<Raw>())
         val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
         for (c in cats) {
             pool.execute {
-                try { streams(sec, c.id, ttl)?.let { out.addAll(it) } } catch (e: Throwable) { }
+                try { streams(sec, c.id, ttl, true)?.let { out.addAll(it) } } catch (e: Throwable) { }
             }
         }
         pool.shutdown()
@@ -364,7 +405,7 @@ object Api {
     }
 
     fun epg(streamId: String): List<EpgItem>? {
-        val f = fetchFile(base() + "&action=get_short_epg&stream_id=" + streamId + "&limit=4", 120, 8000) ?: return null
+        val f = fetchFile(base() + "&action=get_short_epg&stream_id=" + streamId + "&limit=4", 120, 6000) ?: return null
         val o = try { JSONObject(f.readText()) } catch (e: Exception) { return null }
         val a = o.optJSONArray("epg_listings") ?: return emptyList()
         val out = ArrayList<EpgItem>()

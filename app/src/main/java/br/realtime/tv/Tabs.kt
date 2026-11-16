@@ -124,7 +124,7 @@ class BrowseTab(private val shell: ShellScreen, private val sec: String) : Tab {
         rv.adapter = null
         msg.text = "Carregando..."
         msg.visibility = View.VISIBLE
-        async({ Api.streams(sec, cat.id)?.map { it.e } }) { r ->
+        async({ Api.streams(sec, cat.id, 1800, true)?.map { it.e } }) { r ->
             if (my == token) {
                 if (r == null) {
                     msg.text = "Não foi possível carregar esta categoria."
@@ -200,8 +200,10 @@ class SearchTab(private val shell: ShellScreen) : Tab {
         })
     }
 
+    private val accents = Regex("\\p{M}+")
+
     private fun fold(s: String): String =
-        Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(Locale.ROOT)
+        Normalizer.normalize(s, Normalizer.Form.NFD).replace(accents, "").lowercase(Locale.ROOT)
 
     override fun onShow() {
         if (ready || loading) return
@@ -216,14 +218,17 @@ class SearchTab(private val shell: ShellScreen) : Tab {
                     for (r in l) if (!adult.contains(r.cat)) all.add(r.e)
                 }
             }
-            all
+            // prepara os nomes sem acento aqui (segundo plano) para a tela não travar
+            val folded = ArrayList<String>(all.size)
+            for (e in all) folded.add(fold(e.name))
+            Pair(all, folded)
         }) { r ->
             loading = false
-            if (r == null || r.isEmpty()) {
+            if (r == null || r.first.isEmpty()) {
                 msg.text = "Não foi possível preparar a busca."
             } else {
-                entries = r
-                names = r.map { fold(it.name) }
+                entries = r.first
+                names = r.second
                 ready = true
                 msg.text = "Digite para buscar"
                 search()

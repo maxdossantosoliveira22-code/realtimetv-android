@@ -32,6 +32,7 @@ class MainActivity : Activity() {
         root.setBackgroundColor(C.BG)
         setContentView(root)
         val logged = Store.user.isNotEmpty() && Store.pass.isNotEmpty()
+        if (logged) Api.warm()
         reset(IntroScreen(this, logged))
     }
 

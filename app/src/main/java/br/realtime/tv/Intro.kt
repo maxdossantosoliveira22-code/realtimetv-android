@@ -86,7 +86,10 @@ class IntroView(ctx: Context, private val onDone: () -> Unit) : View(ctx) {
         null
     }
 
+    var speed = 1f
+
     fun start() {
+        anim.duration = (((total + fade) * 1000) / speed).toLong()
         anim.start()
     }
 

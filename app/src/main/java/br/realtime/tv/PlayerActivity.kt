@@ -24,6 +24,8 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 
 class PlayerActivity : Activity() {
     private var player: ExoPlayer? = null
@@ -54,6 +56,7 @@ class PlayerActivity : Activity() {
     private var overlayOn = false
     private var userSeeking = false
     private var epgSeq = 0
+    private var switches = 0
 
     private val hideRun = Runnable { hideOverlay() }
     private val saveRun = object : Runnable {
@@ -69,6 +72,16 @@ class PlayerActivity : Activity() {
         }
     }
     private val watchdog = Runnable { fail(null) }
+    // canal ao vivo parado "carregando" por muito tempo: troca o formato (HLS <-> TS)
+    private val stall = Runnable {
+        if (isLive() && cands.size > 1 && switches < 4) {
+            switches++
+            attempt = (attempt + 1) % cands.size
+            msg.text = "Sinal instável. Trocando o formato..."
+            msg.visibility = View.VISIBLE
+            playCandidate()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -166,23 +179,40 @@ class PlayerActivity : Activity() {
         super.onStart()
         if (list.isEmpty()) return
         val http = DefaultHttpDataSource.Factory()
-            .setUserAgent("Realtime/1.0 (Android)")
+            .setUserAgent("Realtime/2.1 (Android)")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(20000)
-        val rf = DefaultRenderersFactory(this).setEnableDecoderFallback(true)
-        val lc = DefaultLoadControl.Builder().setBufferDurationsMs(15000, 50000, 1500, 3000).build()
+            .setConnectTimeoutMs(8000)
+            .setReadTimeoutMs(12000)
+        val rf = DefaultRenderersFactory(this)
+            .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+        // buffer maior depois de uma parada: evita "trava, anda, trava de novo"
+        val lc = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(20000, 60000, 2000, 5000)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        // TS ao vivo (Globo, SBT, Record...): aceita quadros sem IDR e detecta limites de quadro
+        val ex = DefaultExtractorsFactory()
+            .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS)
+            .setConstantBitrateSeekingEnabled(true)
         val p = ExoPlayer.Builder(this, rf)
             .setLoadControl(lc)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(http))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(http, ex))
             .build()
         p.setVideoSurfaceView(surface)
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 when (state) {
-                    Player.STATE_BUFFERING -> spinner.visibility = View.VISIBLE
+                    Player.STATE_BUFFERING -> {
+                        spinner.visibility = View.VISIBLE
+                        if (isLive()) {
+                            handler.removeCallbacks(stall)
+                            handler.postDelayed(stall, 12000)
+                        }
+                    }
                     Player.STATE_READY -> {
                         handler.removeCallbacks(watchdog)
+                        handler.removeCallbacks(stall)
                         spinner.visibility = View.GONE
                         msg.visibility = View.GONE
                         liveRetry = 0
@@ -195,6 +225,12 @@ class PlayerActivity : Activity() {
                 btnPlay.text = if (isPlaying) "Pausar" else "Continuar"
             }
             override fun onPlayerError(error: PlaybackException) {
+                // ficou para trás da janela do ao vivo: volta para o ponto atual sem trocar de formato
+                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                    player?.seekToDefaultPosition()
+                    player?.prepare()
+                    return
+                }
                 fail(error)
             }
         })
@@ -208,6 +244,7 @@ class PlayerActivity : Activity() {
         handler.removeCallbacks(saveRun)
         handler.removeCallbacks(tickRun)
         handler.removeCallbacks(watchdog)
+        handler.removeCallbacks(stall)
         handler.removeCallbacks(hideRun)
         save()
         player?.release()
@@ -234,6 +271,8 @@ class PlayerActivity : Activity() {
         cands = Api.candidates(entry)
         attempt = 0
         liveRetry = 0
+        switches = 0
+        handler.removeCallbacks(stall)
         titleV.text = (if (isLive() && entry.num.isNotEmpty()) entry.num + "  " else "") + entry.name
         subV.text = ""
         seekRow.visibility = if (isLive()) View.GONE else View.VISIBLE
@@ -253,6 +292,18 @@ class PlayerActivity : Activity() {
         val url = cands[attempt]
         val b = MediaItem.Builder().setUri(url)
         if (url.contains(".m3u8")) b.setMimeType(MimeTypes.APPLICATION_M3U8)
+        if (isLive() && url.contains(".m3u8")) {
+            // fica um pouco atrás do "agora": mais folga contra paradas
+            b.setLiveConfiguration(
+                MediaItem.LiveConfiguration.Builder()
+                    .setTargetOffsetMs(12000)
+                    .setMinOffsetMs(6000)
+                    .setMaxOffsetMs(40000)
+                    .setMinPlaybackSpeed(0.97f)
+                    .setMaxPlaybackSpeed(1.03f)
+                    .build()
+            )
+        }
         var start = 0L
         if (!isLive() && attempt == 0) {
             val saved = Store.recentFind(entry.t, entry.id)
@@ -266,14 +317,26 @@ class PlayerActivity : Activity() {
         p.prepare()
         p.playWhenReady = true
         handler.removeCallbacks(watchdog)
-        handler.postDelayed(watchdog, if (isLive()) 20000 else 40000)
+        handler.postDelayed(watchdog, if (isLive()) 12000 else 30000)
     }
 
     private fun fail(error: PlaybackException?) {
         handler.removeCallbacks(watchdog)
+        handler.removeCallbacks(stall)
         attempt++
         if (attempt < cands.size) {
             playCandidate()
+            return
+        }
+        // canal ao vivo: tenta reconectar sozinho algumas vezes antes de desistir
+        if (isLive() && liveRetry < 6) {
+            liveRetry++
+            attempt = 0
+            msg.text = "Reconectando... ($liveRetry/6)"
+            msg.visibility = View.VISIBLE
+            spinner.visibility = View.VISIBLE
+            val keep = index
+            handler.postDelayed({ if (player != null && index == keep) playCandidate() }, 2500)
             return
         }
         spinner.visibility = View.GONE

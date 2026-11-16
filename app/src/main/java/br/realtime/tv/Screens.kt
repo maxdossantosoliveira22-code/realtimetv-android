@@ -27,6 +27,7 @@ class IntroScreen(act: MainActivity, private val logged: Boolean) : Screen(act) 
     private var started = false
 
     init {
+        iv.speed = if (logged) 2.2f else 1.5f
         iv.setOnClickListener { skip() }
     }
 
@@ -156,6 +157,7 @@ class LoginScreen(act: MainActivity) : Screen(act) {
                 status.text = err
             } else {
                 if (oldUser != u) Store.clearUserData()
+                Api.warm()
                 act.reset(ShellScreen(act))
             }
         }

@@ -54,7 +54,7 @@ class PosterView(ctx: Context) : LinearLayout(ctx) {
         val pad = if (live) Ui.dp(18) else 0
         img.setPadding(pad, pad, pad, pad)
         val w = if (cardW > 0) cardW else Ui.dp(140)
-        Img.load(img, e.icon, w, (w * 1.5f).toInt())
+        Img.load(img, e.icon, w, (w * 1.5f).toInt(), small = !live)
         if (e.rating.isNotEmpty() && !live) {
             badge.text = e.rating
             badge.visibility = View.VISIBLE
@@ -151,11 +151,13 @@ class ChannelRow(ctx: Context) : LinearLayout(ctx) {
 
 object EpgCache {
     private val map = HashMap<String, Pair<Long, List<EpgItem>>>()
+    @Synchronized
     fun get(id: String): List<EpgItem>? {
         val p = map[id] ?: return null
         if (System.currentTimeMillis() - p.first > 120000) return null
         return p.second
     }
+    @Synchronized
     fun put(id: String, l: List<EpgItem>) {
         if (map.size > 400) map.clear()
         map[id] = Pair(System.currentTimeMillis(), l)
@@ -188,10 +190,13 @@ class ChannelAdapter(var items: List<Entry>, private val onClick: (Int) -> Unit)
             row.setEpg(cached)
         } else {
             val id = e.id
-            async({ Api.epg(id) }) { r ->
+            Bg.epg {
+                // a linha já foi reaproveitada por outro canal (rolagem rápida): não pede nada ao servidor
+                if (row.epgFor != id) return@epg
+                val r = try { Api.epg(id) } catch (ex: Throwable) { null }
                 if (r != null) {
                     EpgCache.put(id, r)
-                    if (row.epgFor == id) row.setEpg(r)
+                    Bg.ui { if (row.epgFor == id) row.setEpg(r) }
                 }
             }
         }

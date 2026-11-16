@@ -25,5 +25,5 @@ class App : Application() {
 object Config {
     const val SERVER = "http://186.235.127.27:30021"
     const val NAME = "Realtime"
-    const val VERSION = "1.0.0"
+    const val VERSION = "2.1.0"
 }
