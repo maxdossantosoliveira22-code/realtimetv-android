@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "br.realtime.tv.app-debug-11:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "br.realtime.tv.app-main-13:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "br.realtime.tv.app-debug-11:/drawable-xhdpi_banner.png.flat",
+        "source": "br.realtime.tv.app-main-13:/drawable-xhdpi/banner.png"
+    }
+]
